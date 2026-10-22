@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Proxy Browser</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0b1220;color:#e5e7eb;
+    display:flex;flex-direction:column;height:100vh;overflow:hidden;
+  }
+
+  /* ===== Top bar ===== */
+  .topbar{
+    display:flex;align-items:center;gap:8px;
+    padding:10px 12px;background:#111827;
+    border-bottom:1px solid #1f2937;flex:0 0 auto;
+  }
+  .logo{
+    display:flex;align-items:center;gap:8px;
+    font-weight:700;font-size:14px;color:#e5e7eb;
+    padding-right:6px;white-space:nowrap;
+  }
+  .logo .dot{
+    width:8px;height:8px;border-radius:50%;background:#38bdf8;
+    box-shadow:0 0 0 3px rgba(56,189,248,.2);
+  }
+
+  .nav-btns{display:flex;gap:4px}
+  .icon-btn{
+    width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+    background:#1f2937;color:#cbd5e1;border:1px solid #334155;border-radius:8px;
+    cursor:pointer;font-size:16px;line-height:1;padding:0;
+    transition:background .12s;
+  }
+  .icon-btn:hover:not(:disabled){background:#334155;color:#fff}
+  .icon-btn:disabled{opacity:.35;cursor:not-allowed}
+
+  .url-wrap{
+    flex:1;display:flex;align-items:center;gap:6px;
+    background:#0f172a;border:1px solid #334155;border-radius:8px;
+    padding:0 4px 0 12px;min-width:0;
+    transition:border-color .15s;
+  }
+  .url-wrap:focus-within{border-color:#38bdf8}
+  .url-wrap .status-dot{
+    width:8px;height:8px;border-radius:50%;background:#94a3b8;flex:0 0 auto;
+    transition:background .2s;
+  }
+  .url-wrap .status-dot.loading{background:#f59e0b;animation:pulse 1s infinite}
+  .url-wrap .status-dot.ok{background:#22c55e}
+  .url-wrap .status-dot.err{background:#ef4444}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  #urlInput{
+    flex:1;background:transparent;color:#e5e7eb;border:0;outline:none;
+    font:13px ui-monospace,Menlo,Consolas,monospace;padding:9px 0;min-width:0;
+  }
+  #urlInput::placeholder{color:#475569}
+
+  .btn{
+    cursor:pointer;font:inherit;font-size:12px;font-weight:600;
+    padding:7px 14px;border-radius:7px;border:0;
+    background:#2563eb;color:#fff;transition:background .12s;
+    white-space:nowrap;
+  }
+  .btn:hover{background:#1d4ed8}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+
+  .btn-ghost{
+    background:transparent;color:#94a3b8;border:1px solid #334155;
+  }
+  .btn-ghost:hover:not(:disabled){background:#1f2937;color:#e5e7eb}
+
+  /* ===== Quick links ===== */
+  .quicklinks{
+    display:flex;gap:6px;padding:8px 12px;
+    background:#0b1220;border-bottom:1px solid #1f2937;
+    overflow-x:auto;flex:0 0 auto;scrollbar-width:none;
+  }
+  .quicklinks::-webkit-scrollbar{display:none}
+  .chip{
+    cursor:pointer;font:inherit;font-size:11px;font-weight:500;
+    padding:5px 11px;border-radius:999px;border:1px solid #334155;
+    background:#1f2937;color:#cbd5e1;white-space:nowrap;
+    transition:background .12s,border-color .12s,color .12s;
+  }
+  .chip:hover{background:#334155;color:#fff;border-color:#475569}
+  .chip.active{background:#2563eb;color:#fff;border-color:#2563eb}
+
+  /* ===== Settings strip ===== */
+  .settings{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 12px;background:#0c1424;border-bottom:1px solid #1f2937;
+    font-size:12px;color:#94a3b8;flex:0 0 auto;
+  }
+  .settings.hidden{display:none}
+  .settings label{white-space:nowrap}
+  .settings input{
+    flex:1;background:#0f172a;color:#e5e7eb;border:1px solid #334155;
+    border-radius:6px;padding:6px 10px;font:12px ui-monospace,Menlo,Consolas,monospace;
+    outline:none;min-width:0;
+  }
+  .settings input:focus{border-color:#38bdf8}
+  .settings .hint-ok{color:#86efac}
+  .settings .hint-bad{color:#fca5a5}
+
+  /* ===== Frame ===== */
+  .frame-wrap{
+    flex:1;position:relative;background:#fff;min-height:0;
+  }
+  iframe{
+    width:100%;height:100%;border:0;display:block;background:#fff;
+  }
+  .overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(11,18,32,.92);color:#94a3b8;font-size:13px;
+    text-align:center;padding:40px;flex-direction:column;gap:14px;
+    pointer-events:none;opacity:0;transition:opacity .2s;
+  }
+  .overlay.show{opacity:1;pointer-events:auto}
+  .overlay .big{font-size:44px;opacity:.35;margin-bottom:4px}
+  .overlay .msg{max-width:420px;line-height:1.6}
+  .overlay .msg code{background:#1e293b;padding:1px 6px;border-radius:4px;
+    font-size:12px;color:#7dd3fc}
+  .overlay .err{color:#fca5a5}
+
+  /* ===== Info bar ===== */
+  .infobar{
+    display:flex;align-items:center;gap:12px;
+    padding:6px 12px;background:#0b1220;border-top:1px solid #1f2937;
+    font-size:11px;color:#64748b;flex:0 0 auto;
+  }
+  .infobar .sep{color:#334155}
+  .infobar .k{color:#94a3b8}
+  .infobar .v{color:#e5e7eb;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .infobar .spacer{flex:1}
+  .infobar button{
+    background:none;border:0;color:#94a3b8;cursor:pointer;
+    font:inherit;font-size:11px;padding:2px 6px;border-radius:4px;
+  }
+  .infobar button:hover{background:#1f2937;color:#e5e7eb}
+
+  /* ===== Toasts ===== */
+  .toast{
+    position:fixed;bottom:60px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#1f2937;color:#e5e7eb;padding:10px 18px;border-radius:8px;
+    font-size:12px;border:1px solid #334155;opacity:0;transition:opacity .2s,transform .2s;
+    pointer-events:none;z-index:9999;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.success{border-color:#166534;background:#14532d;color:#bbf7d0}
+  .toast.err{border-color:#991b1b;background:#7f1d1d;color:#fecaca}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="logo"><span class="dot"></span>Proxy</div>
+
+  <div class="nav-btns">
+    <button class="icon-btn" id="btnBack" title="Back" disabled>‹</button>
+    <button class="icon-btn" id="btnFwd" title="Forward" disabled>›</button>
+    <button class="icon-btn" id="btnReload" title="Reload">⟳</button>
+    <button class="icon-btn" id="btnHome" title="Home">⌂</button>
+  </div>
+
+  <div class="url-wrap">
+    <span class="status-dot" id="statusDot"></span>
+    <input id="urlInput" placeholder="https://poki.com/" spellcheck="false" autocomplete="off">
+  </div>
+
+  <button class="btn" id="btnGo">Load</button>
+  <button class="btn btn-ghost" id="btnSettings" title="Worker settings">⚙</button>
+</div>
+
+<div class="quicklinks" id="quicklinks">
+  <button class="chip" data-url="https://poki.com/">Poki</button>
+  <button class="chip" data-url="https://www.coolmathgames.com/">Coolmath</button>
+  <button class="chip" data-url="https://itch.io/">itch.io</button>
+  <button class="chip" data-url="https://www.y8.com/">Y8</button>
+  <button class="chip" data-url="https://www.silvergames.com/">Silvergames</button>
+  <button class="chip" data-url="https://html5games.com/">HTML5 Games</button>
+  <button class="chip" data-url="https://www.crazygames.com/">CrazyGames</button>
+  <button class="chip" data-url="https://www.addictinggames.com/">Addicting</button>
+  <button class="chip" data-url="https://www.agame.com/">Agame</button>
+  <button class="chip" data-url="https://www.1001games.com/">1001 Games</button>
+  <button class="chip" data-url="https://example.com/">example.com</button>
+</div>
+
+<div class="settings hidden" id="settings">
+  <label>Worker URL:</label>
+  <input id="workerInput" placeholder="https://your-worker.workers.dev/" spellcheck="false">
+  <button class="btn btn-ghost" id="btnSaveWorker">Save</button>
+  <button class="btn btn-ghost" id="btnTestWorker">Test</button>
+  <span id="workerHint" style="min-width:90px;font-size:11px"></span>
+</div>
+
+<div class="frame-wrap">
+  <iframe id="frame"
+    sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-top-navigation-by-user-activation allow-downloads"
+    referrerpolicy="no-referrer"></iframe>
+
+  <div class="overlay show" id="overlay">
+    <div class="big">⌂</div>
+    <div class="msg" id="overlayMsg">
+      Configure your worker in <strong>⚙ Settings</strong>, then enter any URL above and press <strong>Load</strong>.
+    </div>
+    <button class="btn" id="btnOverlaySettings">Open Settings</button>
+  </div>
+</div>
+
+<div class="infobar">
+  <span class="k">Target:</span>
+  <span class="v" id="infoTarget">—</span>
+  <span class="sep">·</span>
+  <span class="k">Worker:</span>
+  <span class="v" id="infoWorker">not set</span>
+  <span class="spacer"></span>
+  <button id="btnCopyProxied" title="Copy the encoded proxy URL">Copy proxied URL</button>
+  <button id="btnOpenProxied" title="Open in new tab">Open raw</button>
+  <button id="btnClearHist" title="Clear navigation history">Reset</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ================ ELEMENTS ================ */
+  const $ = id => document.getElementById(id);
+  const urlInput     = $('urlInput');
+  const workerInput  = $('workerInput');
+  const workerHint   = $('workerHint');
+  const frame        = $('frame');
+  const statusDot    = $('statusDot');
+  const overlay      = $('overlay');
+  const overlayMsg   = $('overlayMsg');
+  const settings     = $('settings');
+  const infoTarget   = $('infoTarget');
+  const infoWorker   = $('infoWorker');
+  const toast        = $('toast');
+
+  const btnGo        = $('btnGo');
+  const btnReload    = $('btnReload');
+  const btnHome      = $('btnHome');
+  const btnBack      = $('btnBack');
+  const btnFwd       = $('btnFwd');
+  const btnSettings  = $('btnSettings');
+  const btnSaveWorker = $('btnSaveWorker');
+  const btnTestWorker = $('btnTestWorker');
+  const btnOverlaySettings = $('btnOverlaySettings');
+  const btnCopyProxied = $('btnCopyProxied');
+  const btnOpenProxied = $('btnOpenProxied');
+  const btnClearHist = $('btnClearHist');
+
+  const HOME_URL = 'https://poki.com/';
+
+  /* ================ BASE64 URL-SAFE ================ */
+  function b64e(s) {
+    const bytes = new TextEncoder().encode(s);
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function b64d(s) {
+    s = s.replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    const bin = atob(s);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
+
+  /* ================ STATE ================ */
+  const STORAGE_WORKER = 'proxy.worker';
+  const STORAGE_HIST   = 'proxy.history';
+  const STORAGE_HISTIDX = 'proxy.histidx';
+
+  let workerUrl = localStorage.getItem(STORAGE_WORKER) || '';
+  let history   = JSON.parse(localStorage.getItem(STORAGE_HIST) || '[]');
+  let histIdx   = parseInt(localStorage.getItem(STORAGE_HISTIDX) || '-1', 10);
+
+  /* ================ NORMALIZE INPUT ================ */
+  function normalizeInput(raw) {
+    let u = raw.trim();
+    if (!u) return '';
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try { return new URL(u).toString(); } catch { return ''; }
+  }
+
+  /* ================ WORKER CONFIG ================ */
+  function isValidWorker(u) {
+    if (!u) return false;
+    try {
+      const x = new URL(u);
+      return x.protocol === 'https:' || x.protocol === 'http:';
+    } catch { return false; }
+  }
+
+  function persistWorker(u) {
+    workerUrl = u.replace(/\/?$/, '/'); // ensure trailing slash
+    localStorage.setItem(STORAGE_WORKER, workerUrl);
+    infoWorker.textContent = workerUrl || 'not set';
+    updateOverlayState();
+  }
+
+  function setWorkerHint(text, cls) {
+    workerHint.textContent = text;
+    workerHint.className = cls || '';
+  }
+
+  /* ================ BUILD PROXIED URL ================ */
+  function toProxyUrl(base, targetUrl) {
+    return base + '?u=' + b64e(targetUrl);
+  }
+  function buildProxied(targetUrl) {
+    if (!workerUrl) return '';
+    try { return toProxyUrl(workerUrl, targetUrl); } catch { return ''; }
+  }
+
+  /* ================ NAVIGATION ================ */
+  function setStatus(state) {
+    statusDot.className = 'status-dot ' + (state || '');
+  }
+
+  function showToast(msg, kind) {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (kind ? ' ' + kind : '');
+    setTimeout(() => { toast.className = 'toast' + (kind ? ' ' + kind : ''); }, 2000);
+  }
+
+  function updateNavButtons() {
+    btnBack.disabled = histIdx <= 0;
+    btnFwd.disabled  = histIdx >= history.length - 1;
+  }
+
+  function pushHistory(targetUrl) {
+    // Truncate forward history if any
+    if (histIdx >= 0 && histIdx < history.length - 1) {
+      history = history.slice(0, histIdx + 1);
+    }
+    // Don't push if same as current
+    if (history[histIdx] === targetUrl) return;
+    history.push(targetUrl);
+    histIdx = history.length - 1;
+    localStorage.setItem(STORAGE_HIST, JSON.stringify(history));
+    localStorage.setItem(STORAGE_HISTIDX, String(histIdx));
+    updateNavButtons();
+  }
+
+  function loadTarget(targetUrl, opts = {}) {
+    if (!workerUrl) {
+      openSettings(true);
+      showToast('Set a worker URL first', 'err');
+      return;
+    }
+    if (!targetUrl) return;
+
+    const proxied = buildProxied(targetUrl);
+    if (!proxied) { showToast('Invalid URL', 'err'); return; }
+
+    // Update UI
+    urlInput.value = targetUrl;
+    infoTarget.textContent = targetUrl;
+    setStatus('loading');
+    overlay.classList.remove('show');
+
+    // Load in iframe
+    frame.src = proxied;
+
+    // Save history unless replaying
+    if (!opts.fromHistory) pushHistory(targetUrl);
+
+    // Highlight active chip
+    document.querySelectorAll('.chip').forEach(c => {
+      c.classList.toggle('active', c.dataset.url === targetUrl);
+    });
+  }
+
+  function navigateFromInput() {
+    const raw = urlInput.value.trim();
+    if (!raw) return;
+    const normalized = normalizeInput(raw);
+    if (!normalized) {
+      showToast('Invalid URL', 'err');
+      return;
+    }
+    loadTarget(normalized);
+  }
+
+  /* ================ SETTINGS UI ================ */
+  function openSettings(show) {
+    const shouldShow = show !== undefined ? show : settings.classList.contains('hidden');
+    settings.classList.toggle('hidden', !shouldShow);
+    if (shouldShow) {
+      workerInput.value = workerUrl;
+      workerInput.focus();
+    }
+  }
+
+  function updateOverlayState() {
+    if (!workerUrl) {
+      overlay.classList.add('show');
+      overlayMsg.innerHTML = 'Configure your worker in <strong>⚙ Settings</strong>, then enter any URL above and press <strong>Load</strong>.';
+      return;
+    }
+    // Hide overlay if we have a target loaded
+    if (frame.src && !frame.src.startsWith('about:')) {
+      overlay.classList.remove('show');
+    }
+  }
+
+  /* ================ WORKER TEST ================ */
+  async function testWorker() {
+    const raw = workerInput.value.trim();
+    if (!isValidWorker(raw)) {
+      setWorkerHint('invalid URL', 'hint-bad');
+      return;
+    }
+    setWorkerHint('testing…', '');
+    try {
+      const u = toProxyUrl(raw.replace(/\/?$/, '/'), 'https://example.com/');
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      const res = await fetch(u, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) {
+        const text = await res.text();
+        if (/example/i.test(text) || text.length > 200) {
+          setWorkerHint('✓ OK', 'hint-ok');
+          return true;
+        }
+      }
+      setWorkerHint('reached, odd response', 'hint-bad');
+    } catch (e) {
+      setWorkerHint('✗ ' + (e.name === 'AbortError' ? 'timeout' : 'unreachable'), 'hint-bad');
+    }
+    return false;
+  }
+
+  /* ================ EVENT WIRING ================ */
+  btnGo.addEventListener('click', navigateFromInput);
+  urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') navigateFromInput(); });
+
+  btnReload.addEventListener('click', () => {
+    const t = infoTarget.textContent;
+    if (t && t !== '—') loadTarget(t, { fromHistory: true });
+  });
+
+  btnHome.addEventListener('click', () => loadTarget(HOME_URL));
+
+  btnBack.addEventListener('click', () => {
+    if (histIdx > 0) {
+      histIdx--;
+      localStorage.setItem(STORAGE_HISTIDX, String(histIdx));
+      loadTarget(history[histIdx], { fromHistory: true });
+      updateNavButtons();
+    }
+  });
+
+  btnFwd.addEventListener('click', () => {
+    if (histIdx < history.length - 1) {
+      histIdx++;
+      localStorage.setItem(STORAGE_HISTIDX, String(histIdx));
+      loadTarget(history[histIdx], { fromHistory: true });
+      updateNavButtons();
+    }
+  });
+
+  btnSettings.addEventListener('click', () => openSettings());
+  btnOverlaySettings.addEventListener('click', () => openSettings(true));
+
+  btnSaveWorker.addEventListener('click', async () => {
+    const raw = workerInput.value.trim();
+    if (!isValidWorker(raw)) {
+      setWorkerHint('invalid URL', 'hint-bad');
+      return;
+    }
+    persistWorker(raw);
+    setWorkerHint('saved', 'hint-ok');
+    showToast('Worker saved', 'success');
+    // Auto-test
+    await testWorker();
+  });
+
+  btnTestWorker.addEventListener('click', testWorker);
+
+  workerInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') btnSaveWorker.click();
+  });
+
+  // Quick links
+  document.querySelectorAll('.chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      urlInput.value = chip.dataset.url;
+      navigateFromInput();
+    });
+  });
+
+  btnCopyProxied.addEventListener('click', async () => {
+    const t = infoTarget.textContent;
+    if (!t || t === '—' || !workerUrl) { showToast('Nothing to copy', 'err'); return; }
+    const u = buildProxied(t);
+    try { await navigator.clipboard.writeText(u); showToast('Copied proxied URL', 'success'); }
+    catch { showToast('Copy failed', 'err'); }
+  });
+
+  btnOpenProxied.addEventListener('click', () => {
+    const t = infoTarget.textContent;
+    if (!t || t === '—' || !workerUrl) return;
+    window.open(buildProxied(t), '_blank', 'noopener');
+  });
+
+  btnClearHist.addEventListener('click', () => {
+    history = [];
+    histIdx = -1;
+    localStorage.removeItem(STORAGE_HIST);
+    localStorage.removeItem(STORAGE_HISTIDX);
+    updateNavButtons();
+    infoTarget.textContent = '—';
+    urlInput.value = '';
+    frame.src = 'about:blank';
+    overlay.classList.add('show');
+    overlayMsg.innerHTML = 'History cleared. Enter a URL above and press <strong>Load</strong>.';
+    showToast('Reset', 'success');
+  });
+
+  // The proxied page reports in-frame navigation so the address bar and history follow along.
+  window.addEventListener('message', e => {
+    const d = e.data;
+    if (e.source !== frame.contentWindow || !d || !d.__px || typeof d.url !== 'string') return;
+    try { if (new URL(workerUrl).origin !== e.origin) return; } catch { return; }
+    urlInput.value = d.url;
+    infoTarget.textContent = d.url;
+    pushHistory(d.url);
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('active', c.dataset.url === d.url));
+  });
+
+  // Status dot: use iframe load / error events
+  frame.addEventListener('load', () => {
+    setStatus('ok');
+    overlay.classList.remove('show');
+  });
+  frame.addEventListener('error', () => {
+    setStatus('err');
+    overlay.classList.add('show');
+    overlayMsg.innerHTML = '<span class="err">The proxied page failed to load.</span><br>Check the worker URL and network, then reload.';
+  });
+
+  /* ================ INIT ================ */
+  infoWorker.textContent = workerUrl || 'not set';
+
+  if (workerUrl) {
+    // If we have stored history, restore the last entry
+    if (histIdx >= 0 && history[histIdx]) {
+      urlInput.value = history[histIdx];
+      infoTarget.textContent = history[histIdx];
+      // Don't auto-load on startup — wait for user input to avoid surprising network requests
+      overlay.classList.add('show');
+      overlayMsg.innerHTML = `Last visited: <code>${history[histIdx]}</code><br>Press <strong>Reload</strong> or <strong>Load</strong> to open it again.`;
+    } else {
+      // No history — show quickstart
+      overlay.classList.add('show');
+      overlayMsg.innerHTML = `Ready. Enter a URL above or pick a quick link below the address bar.`;
+      urlInput.value = HOME_URL;
+    }
+  } else {
+    // First run: open settings
+    openSettings(true);
+    overlay.classList.add('show');
+    overlayMsg.innerHTML = 'Welcome! Paste your Cloudflare Worker URL in <strong>⚙ Settings</strong>, then load any site.';
+  }
+
+  updateNavButtons();
+})();
+</script>
+</body>
+</html>

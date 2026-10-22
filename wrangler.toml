@@ -1,0 +1,9 @@
+name = "web-prox"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# [vars]
+# ALLOWED_ORIGINS = "https://yourname.github.io"   # lock cross-origin use to your frontend
+#
+# Optional, avoids GitHub's per-IP rate limit on api/raw.githubusercontent.com:
+#   npx wrangler secret put GITHUB_TOKEN     (use a public-read-only token)
